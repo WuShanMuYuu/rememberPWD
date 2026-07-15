@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/schema.json",
-  "productName": "RememberPasswordManager",
-  "version": "1.0.0",
+  "productName": "RememberPassword",
+  "version": "0.0.0",
   "identifier": "com.remember.passwordmanager",
   "build": {
     "frontendDist": "../dist",
