@@ -6,6 +6,7 @@ use tauri::{AppHandle, State, WebviewWindow};
 use tauri_plugin_shell::ShellExt;
 
 const COLLAPSED_WIDTH: f64 = 48.0;
+const COLLAPSED_HEIGHT: f64 = 144.0; // 与 SideGrip 按钮的 h-36（9rem）保持一致
 const EXPANDED_WIDTH: f64 = 520.0;
 
 pub fn position_window(window: &WebviewWindow, expanded: bool) {
@@ -25,9 +26,14 @@ pub fn position_window(window: &WebviewWindow, expanded: bool) {
         let work_height = work_area.size.height as f64 / scale;
 
         let width = if expanded { EXPANDED_WIDTH } else { COLLAPSED_WIDTH };
-        let height = work_height;
+        let height = if expanded { work_height } else { COLLAPSED_HEIGHT };
         let x = work_x + work_width - width;
-        let y = work_y;
+        let y = if expanded {
+            work_y
+        } else {
+            // 收起时按钮垂直居中，只占用按钮自身高度的区域
+            work_y + (work_height - height) / 2.0
+        };
 
         let _ = window.set_position(tauri::Position::Logical(tauri::LogicalPosition { x, y }));
         let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize { width, height }));
