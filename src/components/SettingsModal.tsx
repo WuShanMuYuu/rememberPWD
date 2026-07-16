@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { open } from '@tauri-apps/plugin-dialog';
 import * as api from '../api';
+import { CsvImportModal } from './CsvImportModal';
+import { CsvExportModal } from './CsvExportModal';
 
 export interface AccountTypeOption {
   value: string;
@@ -12,6 +14,7 @@ interface SettingsModalProps {
   types: AccountTypeOption[];
   onSave: (types: AccountTypeOption[]) => void;
   onClose: () => void;
+  onImport?: () => void;
 }
 
 const DEFAULT_TYPES: AccountTypeOption[] = [
@@ -20,8 +23,10 @@ const DEFAULT_TYPES: AccountTypeOption[] = [
   { value: 'windows', label: 'Windows', toolPath: '' },
 ];
 
-export function SettingsModal({ types, onSave, onClose }: SettingsModalProps) {
+export function SettingsModal({ types, onSave, onClose, onImport }: SettingsModalProps) {
   const [list, setList] = useState<AccountTypeOption[]>([]);
+  const [showImport, setShowImport] = useState(false);
+  const [showExport, setShowExport] = useState(false);
 
   useEffect(() => {
     setList(types.length > 0 ? [...types] : [...DEFAULT_TYPES]);
@@ -180,6 +185,29 @@ export function SettingsModal({ types, onSave, onClose }: SettingsModalProps) {
           </button>
         </div>
 
+        <div className="px-5 py-3 border-t border-cyber-border shrink-0">
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setShowImport(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-cyber-border text-cyber-muted hover:text-cyber-cyan hover:border-cyber-cyan/50 transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              导入 CSV
+            </button>
+            <button
+              onClick={() => setShowExport(true)}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 border border-dashed border-cyber-border text-cyber-muted hover:text-cyber-cyan hover:border-cyber-cyan/50 transition-colors text-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              导出 CSV
+            </button>
+          </div>
+        </div>
+
         <div className="flex items-center gap-3 px-5 py-4 border-t border-cyber-border shrink-0">
           <button
             onClick={handleReset}
@@ -200,6 +228,20 @@ export function SettingsModal({ types, onSave, onClose }: SettingsModalProps) {
             保存
           </button>
         </div>
+
+        {showImport && (
+          <CsvImportModal
+            typeOptions={list.map((t) => t.value)}
+            typeLabels={list}
+            onClose={() => setShowImport(false)}
+            onImported={() => {
+              setShowImport(false);
+              onImport?.();
+            }}
+          />
+        )}
+
+        {showExport && <CsvExportModal onClose={() => setShowExport(false)} />}
       </div>
     </div>
   );

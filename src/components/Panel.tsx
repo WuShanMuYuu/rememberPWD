@@ -286,6 +286,7 @@ export function Panel({ onCollapse, onLock }: PanelProps) {
             setFilter('all');
           }}
           onClose={() => setShowSettings(false)}
+          onImport={loadAccounts}
         />
       )}
     </div>

@@ -5,6 +5,26 @@ import type { Account } from './types';
 
 const currentWindow = getCurrentWebviewWindow();
 
+export interface CsvColumnMapping {
+  name?: string | null;
+  address?: string | null;
+  username?: string | null;
+  password?: string | null;
+  remark?: string | null;
+  account_type: string;
+}
+
+export interface CsvParseResult {
+  headers: string[];
+  preview: string[][];
+}
+
+export interface CsvImportResult {
+  imported: number;
+  skipped: number;
+  errors: string[];
+}
+
 export async function setCollapsedMode(): Promise<void> {
   return invoke('set_collapsed_mode');
 }
@@ -75,4 +95,19 @@ export async function exitApp(): Promise<void> {
 
 export async function launchAccountTool(account: Account): Promise<void> {
   return invoke('launch_account_tool', { account });
+}
+
+export async function parseCsvHeaders(path: string): Promise<CsvParseResult> {
+  return invoke('parse_csv_headers', { path });
+}
+
+export async function importAccountsFromCsv(
+  path: string,
+  mapping: CsvColumnMapping
+): Promise<CsvImportResult> {
+  return invoke('import_accounts_from_csv', { path, mapping });
+}
+
+export async function exportAccountsToCsv(path: string): Promise<number> {
+  return invoke('export_accounts_to_csv', { path });
 }

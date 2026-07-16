@@ -330,6 +330,199 @@ pub async fn launch_account_tool(account: AccountDto, app: AppHandle) -> Result<
     Ok(())
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CsvColumnMapping {
+    pub name: Option<String>,
+    pub address: Option<String>,
+    pub username: Option<String>,
+    pub password: Option<String>,
+    pub remark: Option<String>,
+    pub account_type: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CsvParseResult {
+    pub headers: Vec<String>,
+    pub preview: Vec<Vec<String>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CsvImportResult {
+    pub imported: usize,
+    pub skipped: usize,
+    pub errors: Vec<String>,
+}
+
+fn read_csv_text(path: &str) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("读取 CSV 文件失败：{}", e))?;
+    decode_csv_bytes(&bytes)
+}
+
+fn decode_csv_bytes(bytes: &[u8]) -> Result<String, String> {
+    // 去除 UTF-8 BOM
+    let bytes = if bytes.starts_with(b"\xef\xbb\xbf") {
+        &bytes[3..]
+    } else {
+        bytes
+    };
+
+    // 优先按 UTF-8 解码
+    if let Ok(text) = std::str::from_utf8(bytes) {
+        return Ok(text.to_string());
+    }
+
+    // UTF-8 失败则回退到 GB18030（兼容 GBK）
+    let (cow, _, had_errors) = encoding_rs::GB18030.decode(bytes);
+    if had_errors {
+        return Err("CSV 文件编码无法识别，请保存为 UTF-8 或 GB18030/GBK".into());
+    }
+    Ok(cow.into_owned())
+}
+
+#[tauri::command]
+pub fn parse_csv_headers(path: String) -> Result<CsvParseResult, String> {
+    let text = read_csv_text(&path)?;
+    let mut reader = csv::Reader::from_reader(text.as_bytes());
+    let headers: Vec<String> = reader
+        .headers()
+        .map_err(|e| format!("读取列头失败：{}", e))?
+        .iter()
+        .map(|h| h.trim().to_string())
+        .collect();
+
+    let mut preview = Vec::new();
+    for record in reader.records().take(8) {
+        let record = record.map_err(|e| format!("读取行失败：{}", e))?;
+        preview.push(record.iter().map(|v| v.to_string()).collect());
+    }
+
+    Ok(CsvParseResult { headers, preview })
+}
+
+#[tauri::command]
+pub async fn import_accounts_from_csv(
+    path: String,
+    mapping: CsvColumnMapping,
+    state: State<'_, CryptoState>,
+) -> Result<CsvImportResult, String> {
+    let key = get_key(&state)?;
+    let text = read_csv_text(&path)?;
+    let mut reader = csv::Reader::from_reader(text.as_bytes());
+    let headers: Vec<String> = reader
+        .headers()
+        .map_err(|e| format!("读取列头失败：{}", e))?
+        .iter()
+        .map(|h| h.trim().to_string())
+        .collect();
+
+    let col_index = |name: &Option<String>| -> Option<usize> {
+        name.as_ref()
+            .and_then(|n| headers.iter().position(|h| h == n))
+    };
+
+    let name_idx = col_index(&mapping.name);
+    let address_idx = col_index(&mapping.address);
+    let username_idx = col_index(&mapping.username);
+    let password_idx = col_index(&mapping.password);
+    let remark_idx = col_index(&mapping.remark);
+
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    let mut errors = Vec::new();
+
+    for (row_num, record) in reader.records().enumerate() {
+        let row_idx = row_num + 2; // CSV 行号从 1 开始，第 1 行为列头
+        let record = match record {
+            Ok(r) => r,
+            Err(e) => {
+                errors.push(format!("第 {} 行读取失败：{}", row_idx, e));
+                skipped += 1;
+                continue;
+            }
+        };
+
+        let get = |idx: Option<usize>| -> String {
+            idx.map(|i| record.get(i).unwrap_or("").trim().to_string())
+                .unwrap_or_default()
+        };
+
+        let name = get(name_idx);
+        let address = get(address_idx);
+        let username = get(username_idx);
+        let password = get(password_idx);
+        let remark = get(remark_idx);
+
+        if name.is_empty() && username.is_empty() && address.is_empty() {
+            skipped += 1;
+            continue;
+        }
+
+        let encrypted_password = crypto::encrypt_with_key(&password, &key).map_err(|e| e.to_string())?;
+
+        let account = db::Account {
+            id: None,
+            r#type: mapping.account_type.clone(),
+            name,
+            address,
+            port: None,
+            username,
+            password: encrypted_password,
+            remark,
+            created_at: None,
+            updated_at: None,
+            used_at: None,
+        };
+
+        match db::insert_account(&account) {
+            Ok(_) => imported += 1,
+            Err(e) => {
+                errors.push(format!("第 {} 行写入失败：{}", row_idx, e));
+                skipped += 1;
+            }
+        }
+    }
+
+    Ok(CsvImportResult { imported, skipped, errors })
+}
+
+#[tauri::command]
+pub async fn export_accounts_to_csv(
+    path: String,
+    state: State<'_, CryptoState>,
+) -> Result<usize, String> {
+    use std::io::Write;
+
+    let key = get_key(&state)?;
+    let accounts = db::list_accounts(None, None).map_err(|e| e.to_string())?;
+
+    let mut file = std::fs::File::create(&path).map_err(|e| format!("创建 CSV 文件失败：{}", e))?;
+    file.write_all(b"\xef\xbb\xbf")
+        .map_err(|e| format!("写入文件头失败：{}", e))?;
+    let mut writer = csv::Writer::from_writer(file);
+    writer
+        .write_record(&["type", "name", "address", "username", "password", "remark"])
+        .map_err(|e| format!("写入列头失败：{}", e))?;
+
+    let mut exported = 0usize;
+    for account in accounts {
+        let password = crypto::decrypt_with_key(&account.password, &key).unwrap_or_default();
+        writer
+            .write_record(&[
+                &account.r#type,
+                &account.name,
+                &account.address,
+                &account.username,
+                &password,
+                &account.remark,
+            ])
+            .map_err(|e| format!("写入行失败：{}", e))?;
+        exported += 1;
+    }
+
+    writer.flush().map_err(|e| format!("刷新文件失败：{}", e))?;
+    Ok(exported)
+}
+
 fn run_command(cmd: &str) -> Result<(), String> {
     let parts: Vec<&str> = cmd.split_whitespace().collect();
     if parts.is_empty() {
