@@ -174,6 +174,15 @@ export function Panel({ onCollapse, onLock }: PanelProps) {
             </div>
             <div className="flex items-center gap-1">
               <button
+                onClick={() => { setEditingAccount(null); setShowForm(true); }}
+                className="p-2 text-cyber-muted hover:text-cyber-cyan hover:bg-cyber-card transition-colors"
+                title="新增账号"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+              <button
                 onClick={() => setShowSettings(true)}
                 className="p-2 text-cyber-muted hover:text-cyber-cyan hover:bg-cyber-card transition-colors"
                 title="分类设置"

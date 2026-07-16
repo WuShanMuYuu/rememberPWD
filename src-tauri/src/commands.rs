@@ -291,12 +291,21 @@ pub async fn launch_account_tool(account: AccountDto, app: AppHandle) -> Result<
             }
         }
 
-        "windows" => {
+        "windows" | "rdp" => {
             let port = account.port.unwrap_or(3389);
-            std::process::Command::new("mstsc")
-                .arg(format!("/v:{}:{}", host, port))
-                .spawn()
-                .map_err(|e| format!("启动远程桌面失败：{}", e))?;
+            if !tool_path.is_empty() {
+                let cmd = tool_path
+                    .replace("{host}", host)
+                    .replace("{port}", &port.to_string())
+                    .replace("{username}", &account.username)
+                    .replace("{password}", &account.password);
+                run_command(&cmd)?;
+            } else {
+                std::process::Command::new("mstsc")
+                    .arg(format!("/v:{}:{}", host, port))
+                    .spawn()
+                    .map_err(|e| format!("启动远程桌面失败：{}", e))?;
+            }
         }
 
         _ => {

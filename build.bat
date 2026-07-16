@@ -27,8 +27,8 @@ echo.
 
 :: Clean old release cache
 echo [2/3] Cleaning old build cache...
-if exist "src-tauri\target\release\remember-password-manager.exe" (
-    del /f /q "src-tauri\target\release\remember-password-manager.exe" >nul 2>&1
+if exist "src-tauri\target\release" (
+    rmdir /s /q "src-tauri\target\release" >nul 2>&1
 )
 echo       Done.
 echo.
